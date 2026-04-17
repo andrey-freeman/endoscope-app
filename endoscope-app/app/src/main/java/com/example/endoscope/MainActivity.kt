@@ -104,7 +104,7 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
             val intent = Intent(ACTION_USB_PERMISSION)
             val pendingIntent = PendingIntent.getBroadcast(
                 this, 0, intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                PendingIntent.FLAG_IMMUTABLE
             )
             usbManager?.requestPermission(device, pendingIntent)
         }
