@@ -32,22 +32,17 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
 
     private val usbReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            when (intent.action) {
-                ACTION_USB_PERMISSION -> {
+            if (ACTION_USB_PERMISSION == intent.action) {
+                synchronized(this) {
                     val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
                     if (intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)) {
-                        device?.let { connectToDevice(it) }
+                        device?.let {
+                            tvStatus.text = "Разрешение получено, подключаю..."
+                            connectToDevice(it)
+                        }
                     } else {
-                        tvStatus.text = "Доступ к USB отклонён"
+                        tvStatus.text = "Разрешение отклонено.\nПопробуй ещё раз."
                     }
-                }
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    val device = intent.getParcelableExtra<UsbDevice>(UsbManager.EXTRA_DEVICE)
-                    device?.let { requestPermission(it) }
-                }
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
-                    disconnect()
-                    tvStatus.text = "Камера отключена"
                 }
             }
         }
@@ -64,69 +59,57 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         surfaceView.holder.addCallback(this)
         usbManager = getSystemService(Context.USB_SERVICE) as UsbManager
 
-        val filter = IntentFilter().apply {
-            addAction(ACTION_USB_PERMISSION)
-            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
-            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        }
-        registerReceiver(usbReceiver, filter)
+        val filter = IntentFilter(ACTION_USB_PERMISSION)
+        registerReceiver(usbReceiver, filter, RECEIVER_EXPORTED)
 
         btnConnect.setOnClickListener {
             findAndConnectCamera()
         }
-
-        // Проверить уже подключённые устройства
-        findAndConnectCamera()
     }
 
     private fun findAndConnectCamera() {
         val deviceList = usbManager?.deviceList
         if (deviceList.isNullOrEmpty()) {
-            tvStatus.text = "USB устройства не найдены. Подключи камеру."
+            tvStatus.text = "USB устройства не найдены.\nПодключи камеру и нажми снова."
             return
         }
 
-        // Ищем UVC камеру (class 239 или 14)
+        tvStatus.text = "Найдено устройств: ${deviceList.size}"
+
         val camera = deviceList.values.firstOrNull { device ->
-            device.deviceClass == 239 || device.deviceClass == 14 ||
-            device.deviceClass == 0 // composite
-        } ?: deviceList.values.first() // берём первое устройство
+            device.deviceClass == 239 || device.deviceClass == 14 || device.deviceClass == 0
+        } ?: deviceList.values.first()
 
         usbDevice = camera
-        tvStatus.text = "Найдено: ${camera.productName ?: "USB устройство"}"
-        requestPermission(camera)
-    }
+        tvStatus.text = "Устройство: ${camera.productName ?: "USB #${camera.deviceId}"}\nЗапрашиваю доступ..."
 
-    private fun requestPermission(device: UsbDevice) {
-        if (usbManager?.hasPermission(device) == true) {
-            connectToDevice(device)
+        val permissionIntent = PendingIntent.getBroadcast(
+            this,
+            camera.deviceId,
+            Intent(ACTION_USB_PERMISSION).apply {
+                putExtra(UsbManager.EXTRA_DEVICE, camera)
+            },
+            PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        if (usbManager?.hasPermission(camera) == true) {
+            tvStatus.text = "Доступ уже есть, подключаю..."
+            connectToDevice(camera)
         } else {
-            val intent = Intent(ACTION_USB_PERMISSION)
-            val pendingIntent = PendingIntent.getBroadcast(
-                this, 0, intent,
-                PendingIntent.FLAG_IMMUTABLE
-            )
-            usbManager?.requestPermission(device, pendingIntent)
+            usbManager?.requestPermission(camera, permissionIntent)
+            tvStatus.text = "Ожидаю разрешения...\nДолжен появиться диалог"
         }
     }
 
     private fun connectToDevice(device: UsbDevice) {
-        usbConnection = usbManager?.openDevice(device)
-        if (usbConnection == null) {
+        val connection = usbManager?.openDevice(device)
+        if (connection == null) {
             tvStatus.text = "Не удалось открыть устройство"
             return
         }
-        tvStatus.text = "Камера подключена ✓\n${device.productName}"
+        usbConnection = connection
+        tvStatus.text = "✓ Камера подключена!\n${device.productName ?: "USB камера"}"
         btnConnect.text = "Отключить"
-        startUvcPreview(device)
-    }
-
-    private fun startUvcPreview(device: UsbDevice) {
-        // UVC preview через нативный USB
-        surface?.let {
-            // Запуск предпросмотра через USB Video Class
-            tvStatus.text = "Трансляция активна ✓"
-        }
     }
 
     private fun disconnect() {
@@ -134,17 +117,12 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
         usbConnection = null
         usbDevice = null
         btnConnect.text = "Подключить"
+        tvStatus.text = "Отключено"
     }
 
-    override fun surfaceCreated(holder: SurfaceHolder) {
-        surface = holder.surface
-    }
-
+    override fun surfaceCreated(holder: SurfaceHolder) { surface = holder.surface }
     override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-
-    override fun surfaceDestroyed(holder: SurfaceHolder) {
-        surface = null
-    }
+    override fun surfaceDestroyed(holder: SurfaceHolder) { surface = null }
 
     override fun onDestroy() {
         super.onDestroy()
