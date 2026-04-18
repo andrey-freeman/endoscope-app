@@ -62,43 +62,22 @@ class MainActivity : AppCompatActivity(), SurfaceHolder.Callback {
     }
 
     private fun findExternalCamera() {
-    val manager = cameraManager ?: return
-    val cameraIds = manager.cameraIdList
+        val manager = cameraManager ?: return
+        val cameraIds = manager.cameraIdList
 
-    var info = "Камер найдено: ${cameraIds.size}\n"
-    for (id in cameraIds) {
-        val chars = manager.getCameraCharacteristics(id)
-        val facing = chars.get(CameraCharacteristics.LENS_FACING)
-        val facingStr = when(facing) {
-            CameraCharacteristics.LENS_FACING_FRONT -> "фронт"
-            CameraCharacteristics.LENS_FACING_BACK -> "основная"
-            CameraCharacteristics.LENS_FACING_EXTERNAL -> "внешняя"
-            else -> "неизвестно"
-        }
-        info += "ID $id: $facingStr\n"
-    }
-    tvStatus.text = info
-}
-
-        // Ищем внешнюю камеру
-        var externalCameraId: String? = null
+        var info = "Камер найдено: ${cameraIds.size}\n"
         for (id in cameraIds) {
             val chars = manager.getCameraCharacteristics(id)
             val facing = chars.get(CameraCharacteristics.LENS_FACING)
-            if (facing == CameraCharacteristics.LENS_FACING_EXTERNAL) {
-                externalCameraId = id
-                break
+            val facingStr = when(facing) {
+                CameraCharacteristics.LENS_FACING_FRONT -> "фронт"
+                CameraCharacteristics.LENS_FACING_BACK -> "основная"
+                CameraCharacteristics.LENS_FACING_EXTERNAL -> "внешняя"
+                else -> "неизвестно"
             }
+            info += "ID $id: $facingStr\n"
         }
-
-        // Если внешней нет — берём камеру с наибольшим ID (обычно это USB)
-        val cameraId = externalCameraId ?: cameraIds.lastOrNull() ?: run {
-            tvStatus.text = "Камеры не найдены"
-            return
-        }
-
-        tvStatus.text = "Открываю камеру ID: $cameraId"
-        openCamera(cameraId)
+        tvStatus.text = info
     }
 
     private fun openCamera(cameraId: String) {
