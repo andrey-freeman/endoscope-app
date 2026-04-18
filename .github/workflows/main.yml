@@ -25,11 +25,20 @@ jobs:
         with:
           gradle-version: '8.0'
 
-      - name: Build Debug APK
-        run: gradle assembleDebug
+      - name: Build Release APK
+        run: gradle assembleRelease
+
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        with:
+          releaseDirectory: app/build/outputs/apk/release
+          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.KEY_ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: endoscope-debug
-          path: endoscope-app/app/build/outputs/apk/debug/app-debug.apk
+          name: endoscope-release
+          path: endoscope-app/app/build/outputs/apk/release/*.apk
